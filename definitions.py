@@ -116,13 +116,14 @@ def AMVA(system: System):
         for d in DEVICES:
             U[d][c] = X[c]*system.classes[c]['demand'][d]
     final_U = np.sum(U, axis=1)
+    print("Iterações AMVA:", iterations)
     return final_R, X, final_n, final_U
 
 
 def MVA(system: System):
     QUERY_MPL = system.classes[QUERY]['mpl']
     UPDATE_MPL = system.classes[UPDATE]['mpl']
-    
+    iterations =0 
     # Arrays indexados por: [Dispositivo, Classe, i, j]
     # Tamanho +1 para incluir as populações de 0 até MPL
     n_total = np.zeros((len(DEVICES), QUERY_MPL + 1, UPDATE_MPL + 1))
