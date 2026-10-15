@@ -1,6 +1,7 @@
 from typing import TypedDict
 from copy import deepcopy
 import numpy as np
+from tabulate import tabulate
 
 STOP_CONDITION = 0.001
 
@@ -66,7 +67,6 @@ update_class: SysClass = {
 
 
 
-system = System([query_class, update_class])
 
 def get_max_diff(system: System, nnew):
     nold = system.queue_length
@@ -108,12 +108,18 @@ def AMVA(system: System):
 
 
     system.queue_length = n
-        
-    return n, np.sum(R, axis=0), X, iterations
+    final_R = np.sum(R, axis=0)
+    final_n = np.sum(n[:, :2], axis=1)
+    U = np.zeros((3,2))
+    for c in CLASSES:
+        for d in DEVICES:
+            U[d][c] = X[c]*system.classes[c]['demand'][d]
+    final_U = np.sum(U, axis=1)
+    return final_R, X, final_n, final_U
 
 import numpy as np
 
-def MVA(system):
+def MVA(system: System):
     QUERY_MPL = system.classes[QUERY]['mpl']
     UPDATE_MPL = system.classes[UPDATE]['mpl']
     
@@ -159,14 +165,49 @@ def MVA(system):
             for dev in DEVICES:
                 n_total[dev, i, j] = sum(X[c, i, j] * R[dev, c, i, j] for c in CLASSES)
 
-    return np.sum(R[:, :, QUERY_MPL, UPDATE_MPL], axis=0), X[:, QUERY_MPL, UPDATE_MPL], n_total[:, QUERY_MPL, UPDATE_MPL]
+    final_R = np.sum(R[:, :, QUERY_MPL, UPDATE_MPL], axis=0)
+    final_X = X[:, QUERY_MPL, UPDATE_MPL]
+    final_n = n_total[:, QUERY_MPL, UPDATE_MPL]
+    U = np.zeros((3,2))
+    for c in CLASSES:
+        for d in DEVICES:
+            U[d][c] = final_X[c]*system.classes[c]['demand'][d]
+    final_U = np.sum(U, axis=1)
+    return final_R , final_X, final_n, final_U
 
-n, R, X, iterations = AMVA(deepcopy(system))
-# print(X * 1000)
-# print(R / 1000)
+def print_table(mvareturn, title):
+    R, X, n, U = mvareturn
+    matrix = np.array([R / 1000, X * 1000])
+    classes = ["QUERY", "UPDATE"]
+    performace = ["RESPONSE_TIME (s)", "THROUGHPUT (tps)"]
+    print(f"------------------- {title} -------------------")
+    print(tabulate(matrix, headers=classes, showindex=performace, tablefmt='grid'))
+    
+    devices = ["CPU", "DISK_1", "DISK_2"]
+    print(tabulate([n, U * 100],headers=devices, showindex=["QUEUE_LENGTH", "UTILIZATION (%)"], tablefmt='grid'))
 
-R, X, n_total = MVA(system)
+print("----------- CASO BASE -----------\n")
 
-print(f'{R=}')
-print(f'{X=}')
-print(f'{n_total=}')
+amva = AMVA(System([query_class, update_class]))
+print_table(amva, "AMVA - APROXIMADO")
+
+mva = MVA(System([query_class, update_class]))
+
+print_table(mva, "MVA - EXATO")
+
+print('\n')
+
+query_class_3 = deepcopy(query_class)
+update_class_3 = deepcopy(update_class)
+query_class_3['mpl'] = 1
+update_class_3['mpl'] = 3
+
+print("----------- CASO COM UPDATE CLASS MPL = 3 -----------\n")
+
+amva = AMVA(System([query_class_3, update_class_3]))
+print_table(amva, "AMVA - APROXIMADO")
+
+mva = MVA(System([query_class_3, update_class_3]))
+
+print_table(mva, "MVA - EXATO")
+
