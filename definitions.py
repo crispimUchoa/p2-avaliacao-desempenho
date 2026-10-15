@@ -17,11 +17,11 @@ DEVICES = [CPU, DISK_1, DISK_2]
 
 CLASSES = [QUERY, UPDATE]
 
-# Demanda em ms
+# Demanda em s
 class Demand(TypedDict):
-    CPU: int
-    DISK_1: int
-    DISK_2: int
+    CPU: float
+    DISK_1: float
+    DISK_2: float
     
 
 class SysClass(TypedDict):
@@ -30,8 +30,8 @@ class SysClass(TypedDict):
     mpl: int
     # transactions completed
     c: int 
-    # monitoring period in ms
-    monitoring_period: int
+    # monitoring period in s
+    monitoring_period: float
 
 
 class System:
@@ -50,16 +50,16 @@ class System:
 
 
 query_class: SysClass = {
-    'demand': {CPU: 105, DISK_1: 180, DISK_2: 0},
+    'demand': {CPU: 0.105, DISK_1: 0.180, DISK_2: 0},
     'c':7368,
-    'monitoring_period': 1800 * 1000,
+    'monitoring_period': 1800,
     'mpl': 3
     }
 
 update_class: SysClass = {
-    'demand': {CPU: 375, DISK_1: 480, DISK_2: 240},
+    'demand': {CPU: 0.375, DISK_1: 0.480, DISK_2: 0.240},
     'c': 736,
-    'monitoring_period': 1800 * 1000,
+    'monitoring_period': 1800,
     'mpl': 1
 }
 
@@ -117,7 +117,6 @@ def AMVA(system: System):
     final_U = np.sum(U, axis=1)
     return final_R, X, final_n, final_U
 
-import numpy as np
 
 def MVA(system: System):
     QUERY_MPL = system.classes[QUERY]['mpl']
@@ -175,39 +174,29 @@ def MVA(system: System):
     final_U = np.sum(U, axis=1)
     return final_R , final_X, final_n, final_U
 
-def print_table(mvareturn, title):
+def print_table(mvareturn, title, show_unity=True):
     R, X, n, U = mvareturn
-    matrix = np.array([R / 1000, X * 1000])
+    R = R if show_unity else R * 100
+    X = X if show_unity else X * 100
+    n = n if show_unity else n * 100
+    matrix = np.array([R, X])
     classes = ["QUERY", "UPDATE"]
-    performace = ["RESPONSE_TIME (s)", "THROUGHPUT (tps)"]
+    performace = [f"RESPONSE_TIME{' (s)' if show_unity else ' (%)'}", f"THROUGHPUT{' (tps)' if show_unity else ' (%)'}"]
     print(f"------------------- {title} -------------------")
     print(tabulate(matrix, headers=classes, showindex=performace, tablefmt='grid'))
     
     devices = ["CPU", "DISK_1", "DISK_2"]
-    print(tabulate([n, U * 100],headers=devices, showindex=["QUEUE_LENGTH", "UTILIZATION (%)"], tablefmt='grid'))
+    print(tabulate([n, U * 100],headers=devices, showindex=[f"QUEUE_LENGTH{'' if show_unity else ' (%)'}", f"UTILIZATION (%)"], tablefmt='grid'))
 
-print("----------- CASO BASE -----------\n")
 
-amva = AMVA(System([query_class, update_class]))
-print_table(amva, "AMVA - APROXIMADO")
+def APE(y_approximated, y_exact):
+    denominator = np.array(y_exact)
 
-mva = MVA(System([query_class, update_class]))
+    ape = np.where(denominator != 0, np.abs(y_approximated - y_exact) / denominator, 0.0)
+    return ape
 
-print_table(mva, "MVA - EXATO")
-
-print('\n')
-
-query_class_3 = deepcopy(query_class)
-update_class_3 = deepcopy(update_class)
-query_class_3['mpl'] = 1
-update_class_3['mpl'] = 3
-
-print("----------- CASO COM UPDATE CLASS MPL = 3 -----------\n")
-
-amva = AMVA(System([query_class_3, update_class_3]))
-print_table(amva, "AMVA - APROXIMADO")
-
-mva = MVA(System([query_class_3, update_class_3]))
-
-print_table(mva, "MVA - EXATO")
-
+def MVA_APE(amva, mva):
+    R_approx, X_approx, n_approx, U_approx = amva
+    R_exact, X_exact, n_exact, U_exact = mva
+    e_R, e_X, e_n, e_U = APE(R_approx, R_exact), APE(X_approx, X_exact), APE(n_approx, n_exact), APE(U_approx, U_exact)
+    return e_R, e_X, e_n, e_U
