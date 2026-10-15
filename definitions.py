@@ -1,5 +1,6 @@
 from typing import TypedDict
 from copy import deepcopy
+from extra_functions import mva_tuple_to_matrix
 import numpy as np
 from tabulate import tabulate
 
@@ -180,23 +181,73 @@ def print_table(mvareturn, title, show_unity=True):
     X = X if show_unity else X * 100
     n = n if show_unity else n * 100
     matrix = np.array([R, X])
-    classes = ["QUERY", "UPDATE"]
-    performace = [f"RESPONSE_TIME{' (s)' if show_unity else ' (%)'}", f"THROUGHPUT{' (tps)' if show_unity else ' (%)'}"]
+    classes = ["Query", "Update"]
+    performace = [f"Response Time{' (s)' if show_unity else ' (%)'}", f"Throughput{' (tps)' if show_unity else ' (%)'}"]
     print(f"------------------- {title} -------------------")
     print(tabulate(matrix, headers=classes, showindex=performace, tablefmt='grid'))
     
     devices = ["CPU", "DISK_1", "DISK_2"]
-    print(tabulate([n, U * 100],headers=devices, showindex=[f"QUEUE_LENGTH{'' if show_unity else ' (%)'}", f"UTILIZATION (%)"], tablefmt='grid'))
+    print(tabulate([n, U * 100],headers=devices, showindex=[f"Queue Length{'' if show_unity else ' (%)'}", f"Utilization (%)"], tablefmt='grid'))
 
 
 def APE(y_approximated, y_exact):
     denominator = np.array(y_exact)
 
-    ape = np.where(denominator != 0, np.abs(y_approximated - y_exact) / denominator, 0.0)
+    ape = np.where(denominator != 0, np.abs(y_exact - y_approximated) / denominator, 0.0)
     return ape
+
+def PE(y_new, y_std):
+    y_std_arr = np.asarray(y_std)
+    denominator = y_std_arr
+    pe = np.where(denominator != 0, (y_new -  y_std_arr)/ denominator, 0.0)
+    return pe
+    
+
+def MVA_PE(amva, mva):
+    R_approx, X_approx, n_approx, U_approx = amva
+    R_exact, X_exact, n_exact, U_exact = mva
+    e_R, e_X, e_n, e_U = PE(R_approx, R_exact), PE(X_approx, X_exact), PE(n_approx, n_exact), PE(U_approx, U_exact)
+    return e_R, e_X, e_n, e_U
 
 def MVA_APE(amva, mva):
     R_approx, X_approx, n_approx, U_approx = amva
     R_exact, X_exact, n_exact, U_exact = mva
     e_R, e_X, e_n, e_U = APE(R_approx, R_exact), APE(X_approx, X_exact), APE(n_approx, n_exact), APE(U_approx, U_exact)
     return e_R, e_X, e_n, e_U
+
+def MVA_E(amva, mva):
+    return mva_tuple_to_matrix(mva) - mva_tuple_to_matrix(amva)
+
+def MVA_ME(amva, mva):
+    return np.mean(MVA_E(amva, mva))
+
+def MVA_MAE(amva, mva):
+    return np.abs(MVA_ME(amva, mva))
+
+def MVA_MSE(amva, mva):
+    return np.mean(MVA_E(amva, mva) ** 2)
+
+def MVA_RMSE(amva, mva):
+    return np.sqrt(MVA_MSE(amva, mva))
+
+def MVA_MAPE(amva, mva):
+    mva_ape = mva_tuple_to_matrix(MVA_APE(amva, mva))
+    return np.mean(mva_ape)
+
+def print_error_metrics(amva, mva):
+    e = MVA_E(amva, mva)
+    me = MVA_ME(amva, mva)
+    mae = MVA_MAE(amva, mva)
+    mse = MVA_MSE(amva, mva)
+    rmse = MVA_RMSE(amva, mva)
+    mape = MVA_MAPE(amva, mva)
+
+    data = [
+        ["ME", me],
+        ["MAE", mae],
+        ["MSE", mse],
+        ["RMSE", rmse],
+        ["MAPE", mape],
+        ]
+    print("------------------- Métricas de Erro -------------------\n")
+    print(tabulate(data, headers=["Métricas", "Valores"], tablefmt="grid"))
